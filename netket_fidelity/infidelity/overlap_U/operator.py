@@ -5,7 +5,7 @@ from netket.operator import AbstractOperator
 from netket.utils.types import DType
 from netket.utils.numbers import is_scalar
 from netket.vqs import VariationalState, FullSumState
-
+import warnings
 
 class InfidelityOperatorUPsi(AbstractOperator):
     def __init__(
@@ -24,7 +24,11 @@ class InfidelityOperatorUPsi(AbstractOperator):
             raise TypeError("The first argument should be a variational state.")
 
         if not is_unitary and not isinstance(state, FullSumState):
-            raise ValueError(
+            # raise ValueError(
+            #     "Only works with unitary gates. If the gate is non unitary "
+            #     "then you must sample from it. Use a different operator."
+            # )
+            warnings.warn(
                 "Only works with unitary gates. If the gate is non unitary "
                 "then you must sample from it. Use a different operator."
             )

@@ -6,7 +6,7 @@ from netket.utils.types import DType
 
 from .overlap import InfidelityOperatorStandard, InfidelityUPsi
 from .overlap_U import InfidelityOperatorUPsi
-
+import warnings
 
 def InfidelityOperator(
     target: VariationalState,
@@ -129,8 +129,21 @@ def InfidelityOperator(
                 dtype=dtype,
             )
 
+        # if not is_unitary and not sample_Upsi:
+        #     raise ValueError(
+        #         "Non-unitary operators can only be handled by sampling from the state U|ψ⟩. "
+        #         "This is more expensive and disabled by default. "
+        #         ""
+        #         "If your operator is Unitary, please specify so by passing `is_unitary=True` as a "
+        #         "keyword argument. "
+        #         ""
+        #         "If your operator is not unitary, please specify `sample_Upsi=True` explicitly to"
+        #         "sample from that state. "
+        #         "You can also sample from U|ψ⟩ if your operator is unitary. "
+        #         ""
+        #     )
         if not is_unitary and not sample_Upsi:
-            raise ValueError(
+            warnings.warn(
                 "Non-unitary operators can only be handled by sampling from the state U|ψ⟩. "
                 "This is more expensive and disabled by default. "
                 ""
