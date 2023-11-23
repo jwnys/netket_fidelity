@@ -89,7 +89,7 @@ def local_fidelity_kernel(
         cv_coeff=None, 
         model_state=None, model_state_t=None
     ):
-    """ we can do the chunking over the samples, since we only take gradients through the params ! """
+    """ Part handling the local fidelity kernel """
     model_state = model_state or {}
     model_state_t = model_state_t or {}
     
