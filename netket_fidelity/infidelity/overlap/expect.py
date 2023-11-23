@@ -13,7 +13,7 @@ from .operator import InfidelityOperatorStandard
 
 
 @expect.dispatch
-def infidelity(vstate: MCState, op: InfidelityOperatorStandard, chunk_size: None):
+def infidelity(vstate: MCState, op: InfidelityOperatorStandard, chunk_size: int = None):
     if op.hilbert != vstate.hilbert:
         raise TypeError("Hilbert spaces should match")
 
@@ -28,6 +28,7 @@ def infidelity(vstate: MCState, op: InfidelityOperatorStandard, chunk_size: None
         op.target.samples,
         op.cv_coeff,
         return_grad=False,
+        chunk_size=chunk_size,
     )
 
 
@@ -35,7 +36,7 @@ def infidelity(vstate: MCState, op: InfidelityOperatorStandard, chunk_size: None
 def infidelity(  # noqa: F811
     vstate: MCState,
     op: InfidelityOperatorStandard,
-    chunk_size: None,
+    chunk_size: int = None,
     *,
     mutable,
 ):
@@ -53,10 +54,11 @@ def infidelity(  # noqa: F811
         op.target.samples,
         op.cv_coeff,
         return_grad=True,
+        chunk_size=chunk_size,
     )
 
 
-@partial(jax.jit, static_argnames=("afun", "afun_t", "return_grad"))
+@partial(jax.jit, static_argnames=("afun", "afun_t", "return_grad", "chunk_size"))
 def infidelity_sampling_MCState(
     afun,
     afun_t,
@@ -68,6 +70,7 @@ def infidelity_sampling_MCState(
     sigma_t,
     cv_coeff,
     return_grad,
+    chunk_size,
 ):
     N = sigma.shape[-1]
     n_chains_t = sigma_t.shape[-2]
@@ -100,18 +103,20 @@ def infidelity_sampling_MCState(
             σ,
             σ_t,
             n_chains=n_chains_t,
+            chunk_size=chunk_size,
         )
 
     if not return_grad:
         F, F_stats = expect_kernel(params)
         return F_stats.replace(mean=1 - F)
 
-    F, F_vjp_fun, F_stats = nkjax.vjp(
+    out = nkjax.vjp(
         expect_kernel, params, has_aux=True, conjugate=True
     )
+    F, F_vjp_fun, F_stats = out
 
     F_grad = F_vjp_fun(jnp.ones_like(F))[0]
-    F_grad = jax.tree_map(lambda x: mpi.mpi_mean_jax(x)[0], F_grad)
+    # F_grad = jax.tree_map(lambda x: mpi.mpi_mean_jax(x)[0], F_grad)
     I_grad = jax.tree_map(lambda x: -x, F_grad)
     I_stats = F_stats.replace(mean=1 - F)
 
