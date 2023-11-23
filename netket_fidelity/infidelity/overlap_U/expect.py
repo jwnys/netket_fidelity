@@ -89,7 +89,7 @@ def local_fidelity_kernel(
         cv_coeff=None, 
         model_state=None, model_state_t=None
     ):
-    """ Part handling the local fidelity kernel """
+    """ Part handling the local fidelity kernel. """
     model_state = model_state or {}
     model_state_t = model_state_t or {}
     
@@ -178,7 +178,7 @@ def infidelity_sampling_MCState(
     )
     F, F_vjp_fun, F_stats = out # (primals, vjp_fun, aux)
     F_grad = F_vjp_fun(jnp.ones_like(F))[0]
-
+    F_grad = jax.tree_map(lambda x: mpi.mpi_mean_jax(x)[0], F_grad)
     I_grad = jax.tree_map(lambda x: -x, F_grad)
     I_stats = F_stats.replace(mean=1 - F)
 
