@@ -5,7 +5,8 @@ import jax
 from netket.utils.types import PyTree
 from netket.jax import vjp as nkvjp
 from netket.stats import statistics as mpi_statistics, Stats
-
+import netket.jax as nkjax
+from netket.utils import mpi
 
 def expect_2distr(
     log_pdf_new: Callable[[PyTree, jnp.ndarray], jnp.ndarray],
@@ -17,6 +18,7 @@ def expect_2distr(
     σ_old: jnp.ndarray,
     *expected_fun_args,
     n_chains: int = None,
+    chunk_size: int = None,
 ) -> Tuple[jnp.ndarray, Stats]:
     """
     Computes the expectation value over a log-pdf.
@@ -28,6 +30,7 @@ def expect_2distr(
 
     return _expect_2distr(
         n_chains,
+        chunk_size,
         log_pdf_new,
         log_pdf_old,
         expected_fun,
@@ -39,9 +42,10 @@ def expect_2distr(
     )
 
 
-@partial(jax.custom_vjp, nondiff_argnums=(0, 1, 2, 3))
+@partial(jax.custom_vjp, nondiff_argnums=(0, 1, 2, 3, 4))
 def _expect_2distr(
     n_chains,
+    chunk_size,
     log_pdf_new,
     log_pdf_old,
     expected_fun,
@@ -51,7 +55,8 @@ def _expect_2distr(
     σ_old,
     *expected_fun_args,
 ):
-    L_σ = expected_fun(pars_new, pars_old, σ_new, σ_old, *expected_fun_args)
+    pad_axes = [0]*len(expected_fun_args)
+    L_σ = nkjax.apply_chunked(expected_fun, in_axes=(None, None, 0, 0, *pad_axes), chunk_size=chunk_size)(pars_new, pars_old, σ_new, σ_old, *expected_fun_args)
     if n_chains is not None:
         L_σ = L_σ.reshape((n_chains, -1))
 
@@ -62,6 +67,7 @@ def _expect_2distr(
 
 def _expect_fwd_fid(
     n_chains,
+    chunk_size,
     log_pdf_new,
     log_pdf_old,
     expected_fun,
@@ -71,7 +77,10 @@ def _expect_fwd_fid(
     σ_old,
     *expected_fun_args,
 ):
-    L_σ = expected_fun(pars_new, pars_old, σ_new, σ_old, *expected_fun_args)
+    # L_σ = expected_fun(pars_new, pars_old, σ_new, σ_old, *expected_fun_args)
+    pad_axes = [0]*len(expected_fun_args)
+    L_σ = nkjax.apply_chunked(expected_fun, in_axes=(None, None, 0, 0, *pad_axes), chunk_size=chunk_size)(pars_new, pars_old, σ_new, σ_old, *expected_fun_args)
+
     if n_chains is not None:
         L_σ_r = L_σ.reshape((n_chains, -1))
     else:
@@ -86,23 +95,31 @@ def _expect_fwd_fid(
 
     return (L̄_σ, L̄_stat), (pars_new, pars_old, σ_new, σ_old, expected_fun_args, ΔL_σ)
 
-
-def _expect_bwd_fid(n_chains, log_pdf_new, log_pdf_old, expected_fun, residuals, dout):
+def _expect_bwd_fid(n_chains, chunk_size, log_pdf_new, log_pdf_old, expected_fun, residuals, dout):
     pars_new, pars_old, σ_new, σ_old, cost_args, ΔL_σ = residuals
     dL̄, dL̄_stats = dout
-    log_p_old = log_pdf_old(pars_old, σ_old)
+    log_p_old = nkjax.apply_chunked(log_pdf_old, in_axes=(None, 0), chunk_size=chunk_size)(pars_old, σ_old)
 
     def f(pars_new, pars_old, σ_new, σ_old, *cost_args):
         log_p = log_pdf_new(pars_new, σ_new) + log_p_old
         term1 = jax.vmap(jnp.multiply)(ΔL_σ, log_p)
         term2 = expected_fun(pars_new, pars_old, σ_new, σ_old, *cost_args)
         out = term1 + term2
-        out = out.mean()
+        out = out.mean() 
         return out
 
-    _, pb = nkvjp(f, pars_new, pars_old, σ_new, σ_old, *cost_args)
+    chunk_argnums = tuple([2, 3] + [i+4 for i in range(len(cost_args))])
+    # _, pb = nkjax.vjp_chunked(
+    pb = nkjax.vjp_chunked(
+        f, 
+        pars_new, pars_old, σ_new, σ_old, *cost_args, # primals
+        chunk_size=chunk_size, chunk_argnums=chunk_argnums,
+        # nondiff_argnums=chunk_argnums+(1,),
+        has_aux=False
+    )
 
     grad_f = pb(dL̄)
+    grad_f = jax.tree_map(lambda x: mpi.mpi_mean_jax(x)[0], grad_f)
 
     return grad_f
 
