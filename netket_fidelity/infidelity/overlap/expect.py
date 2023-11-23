@@ -116,7 +116,7 @@ def infidelity_sampling_MCState(
     F, F_vjp_fun, F_stats = out
 
     F_grad = F_vjp_fun(jnp.ones_like(F))[0]
-    # F_grad = jax.tree_map(lambda x: mpi.mpi_mean_jax(x)[0], F_grad)
+    F_grad = jax.tree_map(lambda x: mpi.mpi_mean_jax(x)[0], F_grad)
     I_grad = jax.tree_map(lambda x: -x, F_grad)
     I_stats = F_stats.replace(mean=1 - F)
 

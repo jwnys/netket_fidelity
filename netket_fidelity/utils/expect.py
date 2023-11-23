@@ -109,7 +109,6 @@ def _expect_bwd_fid(n_chains, chunk_size, log_pdf_new, log_pdf_old, expected_fun
         return out
 
     chunk_argnums = tuple([2, 3] + [i+4 for i in range(len(cost_args))])
-    # _, pb = nkjax.vjp_chunked(
     pb = nkjax.vjp_chunked(
         f, 
         pars_new, pars_old, σ_new, σ_old, *cost_args, # primals
@@ -119,7 +118,7 @@ def _expect_bwd_fid(n_chains, chunk_size, log_pdf_new, log_pdf_old, expected_fun
     )
 
     grad_f = pb(dL̄)
-    grad_f = jax.tree_map(lambda x: mpi.mpi_mean_jax(x)[0], grad_f)
+    # move the mpi_mean to the external functions
 
     return grad_f
 
