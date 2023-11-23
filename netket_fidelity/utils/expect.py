@@ -102,12 +102,9 @@ def _expect_bwd_fid(n_chains, chunk_size, log_pdf_new, log_pdf_old, expected_fun
         log_p = log_pdf_new(pars_new, σ_new) + log_p_old
         term1 = jax.vmap(jnp.multiply)(ΔL_σ, log_p)
         term2 = expected_fun(pars_new, pars_old, σ_new, σ_old, *cost_args)
-        out = term1 + term2
-        out = out.mean()  # now only mean over the chunk size
-        if chunk_size is None:
-            return out
-        else:
-            return jnp.repeat(out, chunk_size) # needed for chunking
+        out = term1 + term2 # has length of the chunk size
+        # we move the mean outside to the vjp part, which includes a sum
+        return out
     
     chunk_argnums = tuple([2, 3, 4, 5] + [i+5 for i in range(len(cost_args))])
     pb = nkjax.vjp_chunked(
@@ -120,11 +117,8 @@ def _expect_bwd_fid(n_chains, chunk_size, log_pdf_new, log_pdf_old, expected_fun
     )
 
     # netket is a bit annoying here, since it automatically chunks the cotangent
-    if chunk_size is not None:
-        n_samples = log_p_old.shape[0]
-        # internally we have:
-        # mean over the chunk size, but summed chunk_size times --> just the sum
-        dL̄ = jnp.repeat(dL̄ / n_samples, n_samples) # correct the mean factor !
+    n_samples = log_p_old.shape[0]
+    dL̄ = jnp.repeat(dL̄ / n_samples, n_samples) # correct the mean factor !
     grad_f = pb(dL̄)
     # move the mpi_mean to the external functions
 
