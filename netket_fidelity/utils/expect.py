@@ -77,10 +77,8 @@ def _expect_fwd_fid(
     σ_old,
     *expected_fun_args,
 ):
-    # L_σ = expected_fun(pars_new, pars_old, σ_new, σ_old, *expected_fun_args)
     pad_axes = [0]*len(expected_fun_args)
     L_σ = nkjax.apply_chunked(expected_fun, in_axes=(None, None, 0, 0, *pad_axes), chunk_size=chunk_size)(pars_new, pars_old, σ_new, σ_old, *expected_fun_args)
-
     if n_chains is not None:
         L_σ_r = L_σ.reshape((n_chains, -1))
     else:
@@ -100,23 +98,30 @@ def _expect_bwd_fid(n_chains, chunk_size, log_pdf_new, log_pdf_old, expected_fun
     dL̄, dL̄_stats = dout
     log_p_old = nkjax.apply_chunked(log_pdf_old, in_axes=(None, 0), chunk_size=chunk_size)(pars_old, σ_old)
 
-    def f(pars_new, pars_old, σ_new, σ_old, *cost_args):
+    def f(pars_new, pars_old, σ_new, σ_old, ΔL_σ, log_p_old, *cost_args):
         log_p = log_pdf_new(pars_new, σ_new) + log_p_old
         term1 = jax.vmap(jnp.multiply)(ΔL_σ, log_p)
         term2 = expected_fun(pars_new, pars_old, σ_new, σ_old, *cost_args)
         out = term1 + term2
         out = out.mean() 
-        return out
-
-    chunk_argnums = tuple([2, 3] + [i+4 for i in range(len(cost_args))])
+        if chunk_size is None:
+            return out
+        else:
+            return jnp.repeat(out, chunk_size) # needed for chunking
+    
+    chunk_argnums = tuple([2, 3, 4, 5] + [i+5 for i in range(len(cost_args))])
     pb = nkjax.vjp_chunked(
         f, 
-        pars_new, pars_old, σ_new, σ_old, *cost_args, # primals
+        pars_new, pars_old, σ_new, σ_old, ΔL_σ, log_p_old, *cost_args, # primals
         chunk_size=chunk_size, chunk_argnums=chunk_argnums,
+        nondiff_argnums=(4,5), # (ΔL_σ, log_p_old) are not differentiable
         # nondiff_argnums=chunk_argnums+(1,),
         has_aux=False
     )
 
+    # netket is a bit annoying here, since it automatically chunks the cotangent
+    if chunk_size is not None:
+        dL̄ = jnp.repeat(dL̄ / chunk_size, log_p_old.shape[0])
     grad_f = pb(dL̄)
     # move the mpi_mean to the external functions
 
