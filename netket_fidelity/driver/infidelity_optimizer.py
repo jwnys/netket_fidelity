@@ -41,7 +41,7 @@ class InfidelityOptimizer(AbstractVariationalDriver):
         is_unitary=False,
         sample_Upsi=False,
         cv_coeff=-0.5,
-        resample_Upsi=False,
+        resample_target=False,
     ):
         r"""
         Constructs a driver training the state to match the target state.
@@ -127,7 +127,7 @@ class InfidelityOptimizer(AbstractVariationalDriver):
         )
 
         self._cv = cv_coeff
-        self.resample_Upsi = resample_Upsi
+        self.resample_Upsi = resample_target
 
         self._preconditioner = preconditioner
 
