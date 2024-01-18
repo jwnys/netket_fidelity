@@ -3,7 +3,7 @@ from functools import partial
 import jax.numpy as jnp
 import jax
 from netket.utils.types import PyTree
-from netket.jax import vjp as nkvjp
+import netket.jax as nkjax
 from netket.stats import statistics as mpi_statistics, Stats
 import netket.jax as nkjax
 from netket.utils import mpi
@@ -190,7 +190,7 @@ def _expect_onedistr_bwd(n_chains, log_pdf, expected_fun, residuals, dout):
         out = out.mean()
         return out
 
-    _, pb = nkvjp(f, pars, σ, *cost_args)
+    _, pb = nkjax.vjp(f, pars, σ, *cost_args)
 
     grad_f = pb(dL̄)
 

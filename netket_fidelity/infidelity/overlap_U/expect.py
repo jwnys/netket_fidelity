@@ -107,6 +107,12 @@ def local_fidelity_kernel(
     ):
     """ Part handling the local fidelity kernel. """
     
+    # to be sure, we block some gradients
+    σ = jax.lax.stop_gradient(σ)
+    σ_t = jax.lax.stop_gradient(σ_t)
+    args = jax.lax.stop_gradient(args)
+    args_t = jax.lax.stop_gradient(args_t)
+    
     model_state = model_state or {}
     model_state_t = model_state_t or {}
     

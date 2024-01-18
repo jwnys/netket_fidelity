@@ -13,6 +13,9 @@ from netket_fidelity.infidelity import InfidelityOperator
 
 from .infidelity_optimizer_common import info
 
+import jax
+import jax.numpy as jnp
+import json
 
 def _to_tuple(maybe_iterable):
     """
@@ -147,8 +150,17 @@ class InfidelityOptimizer(AbstractVariationalDriver):
 
         self._loss_stats, self._loss_grad = self.state.expect_and_grad(self._I_op)
 
+        #max_dp = jax.tree_map(lambda x: jnp.max(jnp.abs(x)) , self._loss_grad)
+        # print("grads:", json.dumps(jax.tree_map(lambda xmin, xmax, x:  f"{xmin} <= {x.shape} <= {xmax}", min_dp, max_dp, self._dp), indent=4), flush=True)
+        #print("grads before:", json.dumps(jax.tree_map(lambda x:  f"{x.item()}", max_dp), indent=4), flush=True)
+
         # if it's the identity it does
         self._dp = self.preconditioner(self.state, self._loss_grad, self.step_count)
+        
+        #max_dp = jax.tree_map(lambda x: jnp.max(jnp.abs(x)) , self._dp)
+        # print("grads:", json.dumps(jax.tree_map(lambda xmin, xmax, x:  f"{xmin} <= {x.shape} <= {xmax}", min_dp, max_dp, self._dp), indent=4), flush=True)
+        #print("grads:", json.dumps(jax.tree_map(lambda x:  f"{x.item()}", max_dp), indent=4), flush=True)
+
 
         return self._dp
 
